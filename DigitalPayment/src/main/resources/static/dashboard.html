@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<div class="container">
+    <nav>
+        <div class="brand">Digital Wallet</div>
+        <div class="nav-links">
+            <a href="/dashboard.html">Dashboard</a>
+            <button type="button" class="nav-button" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="dashboard-card dashboard-shell">
+        <section class="overview-panel">
+            <div class="profile-header">
+                <div>
+                    <p class="eyebrow">Account Overview</p>
+                    <h2 id="welcomeText">Welcome</h2>
+                </div>
+                <span class="status-pill">Active</span>
+            </div>
+
+            <div class="summary-strip">
+                <div class="stat-card balance-card emphasis">
+                    <span class="card-label">Available Balance</span>
+                    <p id="balanceText">₹0.00</p>
+                </div>
+                <div class="mini-stat-card">
+                    <span class="card-label">Account Number</span>
+                    <p id="accountNumber">-</p>
+                </div>
+                <div class="mini-stat-card">
+                    <span class="card-label">Email</span>
+                    <p id="emailText">-</p>
+                </div>
+                <div class="mini-stat-card">
+                    <span class="card-label">Mobile</span>
+                    <p id="mobileText">-</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="quick-actions-panel">
+            <div class="panel-title-row">
+                <h3>Quick Actions</h3>
+            </div>
+            <div class="action-row">
+                <div class="action-card">
+                    <h3>Credit Money</h3>
+                    <form id="creditForm" class="action-form">
+                        <div>
+                            <label for="creditAmount">Amount</label>
+                            <input id="creditAmount" type="number" min="0.01" step="0.01" placeholder="500" required />
+                        </div>
+                        <div>
+                            <label for="creditNote">Description</label>
+                            <input id="creditNote" type="text" placeholder="Wallet top up" />
+                        </div>
+                        <button type="submit" class="secondary-btn">Add Money</button>
+                    </form>
+                    <div id="creditAlert" class="alert"></div>
+                </div>
+
+                <div class="action-card">
+                    <h3>Debit Money</h3>
+                    <form id="debitForm" class="action-form">
+                        <div>
+                            <label for="debitAmount">Amount</label>
+                            <input id="debitAmount" type="number" min="0.01" step="0.01" placeholder="200" required />
+                        </div>
+                        <div>
+                            <label for="debitNote">Description</label>
+                            <input id="debitNote" type="text" placeholder="Shopping" />
+                        </div>
+                        <button type="submit">Debit</button>
+                    </form>
+                    <div id="debitAlert" class="alert"></div>
+                </div>
+            </div>
+        </section>
+
+        <div class="content-grid">
+            <div class="form-block">
+                <div class="panel-title-row">
+                    <h3>Transfer Money</h3>
+                </div>
+                <form id="transferForm" class="form-grid">
+                    <div>
+                        <label for="receiverIdentifier">Receiver Mobile / Email / Account Number</label>
+                        <input id="receiverIdentifier" type="text" required placeholder="9876543210" />
+                    </div>
+                    <div>
+                        <label for="transferAmount">Amount</label>
+                        <input id="transferAmount" type="number" min="0.01" step="0.01" required placeholder="1000" />
+                    </div>
+                    <div>
+                        <label for="transferNote">Note</label>
+                        <input id="transferNote" type="text" placeholder="Bill payment" />
+                    </div>
+                    <button type="submit">Send Money</button>
+                </form>
+                <div id="transferAlert" class="alert"></div>
+            </div>
+
+            <div class="history-panel">
+                <div class="panel-title-row">
+                    <h3>Recent Transactions</h3>
+                </div>
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Detail</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+    const token = getToken();
+    if (!token) {
+        window.location.href = '/login.html';
+    }
+
+    async function loadDashboard() {
+        const profileResponse = await fetch('/api/auth/me', {
+            headers: authHeaders()
+        });
+
+        if (!profileResponse.ok) {
+            logout();
+            return;
+        }
+
+        const profile = await profileResponse.json();
+        document.getElementById('welcomeText').textContent = 'Welcome, ' + profile.name;
+        document.getElementById('accountNumber').textContent = profile.accountNumber;
+        document.getElementById('balanceText').textContent = formatCurrency(profile.balance);
+        document.getElementById('emailText').textContent = profile.email;
+        document.getElementById('mobileText').textContent = profile.mobile;
+
+        const walletResponse = await fetch('/api/wallet', {
+            headers: authHeaders()
+        });
+        const wallet = await walletResponse.json();
+        document.getElementById('balanceText').textContent = formatCurrency(wallet.balance);
+
+        const historyResponse = await fetch('/api/transactions/history', {
+            headers: authHeaders()
+        });
+        const history = await historyResponse.json();
+        const tableBody = document.getElementById('historyTableBody');
+        tableBody.innerHTML = '';
+
+        if (!history.length) {
+            tableBody.innerHTML = '<tr><td colspan="4">No transactions yet.</td></tr>';
+            return;
+        }
+
+        history.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.referenceNumber}</td>
+                <td>${item.type}</td>
+                <td>${formatCurrency(item.amount)}</td>
+                <td>${item.description}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
+    document.getElementById('creditForm').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const amount = document.getElementById('creditAmount').value;
+        const description = document.getElementById('creditNote').value;
+        const response = await fetch('/api/wallet/credit', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ amount: Number(amount), description })
+        });
+        const result = await response.json();
+        if (!response.ok) {
+            showAlert('creditAlert', 'error', result.message || 'Credit failed');
+            return;
+        }
+        showAlert('creditAlert', 'success', 'Money added successfully');
+        document.getElementById('creditForm').reset();
+        loadDashboard();
+    });
+
+    document.getElementById('debitForm').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const amount = document.getElementById('debitAmount').value;
+        const description = document.getElementById('debitNote').value;
+        const response = await fetch('/api/wallet/debit', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ amount: Number(amount), description })
+        });
+        const result = await response.json();
+        if (!response.ok) {
+            showAlert('debitAlert', 'error', result.message || 'Debit failed');
+            return;
+        }
+        showAlert('debitAlert', 'success', 'Money debited successfully');
+        document.getElementById('debitForm').reset();
+        loadDashboard();
+    });
+
+    document.getElementById('transferForm').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const payload = {
+            receiverIdentifier: document.getElementById('receiverIdentifier').value.trim(),
+            amount: Number(document.getElementById('transferAmount').value),
+            description: document.getElementById('transferNote').value.trim()
+        };
+
+        const response = await fetch('/api/transactions/transfer', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            showAlert('transferAlert', 'error', result.message || 'Transfer failed');
+            return;
+        }
+
+        showAlert('transferAlert', 'success', 'Transfer successful');
+        document.getElementById('transferForm').reset();
+        loadDashboard();
+    });
+
+    loadDashboard();
+</script>
+</body>
+</html>
